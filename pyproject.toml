@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dataatlas"
+version = "0.2.0"
+description = "Learning-scale data discovery and lakehouse workbench"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["dataatlas*"]
+
+[tool.setuptools.package-data]
+dataatlas = ["static/*"]
