@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from dataatlas.sql_workspace import execute_readonly, table_catalog
+from dataatlas.sql_workspace import execute_readonly, table_catalog, validate_readonly_candidate
 
 
 class SqlWorkspaceTests(unittest.TestCase):
@@ -42,6 +42,25 @@ class SqlWorkspaceTests(unittest.TestCase):
             execute_readonly([dataset], f'SELECT * FROM "{table}"')
         with self.assertRaisesRegex(ValueError, "characters or fewer"):
             execute_readonly([self.dataset], "x" * 10_001)
+
+
+    def test_candidate_validation_accepts_select_and_rejects_non_select_forms(self):
+        table = table_catalog([self.dataset])[0]["table_name"]
+        valid = validate_readonly_candidate([self.dataset], f'SELECT COUNT(*) FROM "{table}"')
+        self.assertTrue(valid["plan"])
+        with self.assertRaisesRegex(ValueError, "read-only SELECT"):
+            validate_readonly_candidate([self.dataset], f'DELETE FROM "{table}"')
+        with self.assertRaisesRegex(ValueError, "read-only SELECT"):
+            validate_readonly_candidate([self.dataset], 'VALUES (1)')
+        with self.assertRaises(ValueError):
+            validate_readonly_candidate([self.dataset], f'SELECT * FROM "{table}"; SELECT 1')
+
+    def test_execution_allows_leading_comments_but_only_select(self):
+        table = table_catalog([self.dataset])[0]["table_name"]
+        result = execute_readonly([self.dataset], f'-- safe preview\nSELECT COUNT(*) FROM "{table}"')
+        self.assertEqual(result["rows"], [{"COUNT(*)": 2}])
+        with self.assertRaisesRegex(ValueError, "read-only SELECT"):
+            execute_readonly([self.dataset], "/* comment */ VALUES (1)")
 
 
 if __name__ == "__main__":

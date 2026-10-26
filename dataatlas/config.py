@@ -12,6 +12,8 @@ class Settings:
     max_upload_bytes: int = 10 * 1024 * 1024
     max_csv_rows: int = 100_000
     demo_password: str = "dataatlas-demo"
+    openai_api_key: str | None = None
+    ai_model: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -26,4 +28,6 @@ class Settings:
         demo_password = os.environ.get("DATAATLAS_DEMO_PASSWORD", "dataatlas-demo")
         if len(demo_password) < 10:
             raise ValueError("DATAATLAS_DEMO_PASSWORD must be at least 10 characters.")
-        return cls(data_home=home, host=host, port=port, demo_password=demo_password)
+        return cls(data_home=home, host=host, port=port, demo_password=demo_password,
+                   openai_api_key=os.environ.get("OPENAI_API_KEY") or None,
+                   ai_model=os.environ.get("DATAATLAS_AI_MODEL") or None)

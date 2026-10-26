@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-Checkpoint 10 complete: searchable catalog, profiling, schema evolution, bounded read-only SQL, versioned transformations, observable/retryable ingestion jobs, persisted lineage traversal, executable quality rules, persisted results, and in-app alerts.
+Checkpoint 11 complete: metadata-grounded AI discovery with local fallback, optional OpenAI provider, and schema-validated SQL suggestions requiring explicit user review.
 
 ## Completed
 
@@ -62,15 +62,20 @@ Checkpoint 10 complete: searchable catalog, profiling, schema evolution, bounded
 ## In progress / remaining
 
 - Docker Compose and PostgreSQL service scaffolding are deferred: Docker is not installed in the current environment. The local SQLite setup is runnable and migrated automatically.
-- Next phase: optional AI provider abstraction and metadata-grounded assistance with inspectable, validated SQL suggestions. The lineage graph currently represents transformation edges; external-source nodes and downstream schema-impact analysis remain future work. Durable asynchronous workers, automatic retry/backoff, scheduling, and transformation DAGs are also deferred.
+- Next phase: exports, reporting, dashboard metrics, and UI completion. The lineage graph currently represents transformation edges; external-source nodes and downstream schema-impact analysis remain future work. Durable asynchronous workers, automatic retry/backoff, scheduling, and transformation DAGs are also deferred.
+
+- Added the metadata-grounded assistant with local answers and an optional stateless OpenAI Responses provider; only authorized metadata and aggregate profiles enter provider prompts.
+- Added schema-only SQL suggestion validation via EXPLAIN; candidates are returned for review and do not create query-history records until a user runs them.
+- Added the assistant discovery UI, provider status, local preview/count suggestions, and authenticated API tests.
+- Verified bounded SQL validation, explicit local intent matching, assistant source grounding, local fallback, and authenticated suggestion flow.
 
 ## Files changed
 
-`README.md`, `PROJECT_SPEC.md`, `ARCHITECTURE.md`, `IMPLEMENTATION_PLAN.md`, `DECISIONS.md`, `PROGRESS.md`, `KNOWN_LIMITATIONS.md`, `.env.example`, `pyproject.toml`, `tasks.ps1`, `dataatlas/{accounts.py,catalog.py,config.py,db.py,ingestion.py,jobs.py,lineage.py,profiling.py,quality.py,security.py,server.py,seed.py,sql_workspace.py,storage.py,transformations.py}`, `dataatlas/static/{index.html,styles.css,app.js}`, and tests including `test_auth_api.py`, `test_database.py`, `test_jobs.py`, `test_quality.py`, and `test_quality_api.py`.
+`README.md`, `PROJECT_SPEC.md`, `ARCHITECTURE.md`, `IMPLEMENTATION_PLAN.md`, `DECISIONS.md`, `PROGRESS.md`, `KNOWN_LIMITATIONS.md`, `.env.example`, `pyproject.toml`, `tasks.ps1`, `dataatlas/{accounts.py,assistant.py,catalog.py,config.py,db.py,ingestion.py,jobs.py,lineage.py,profiling.py,quality.py,security.py,server.py,seed.py,sql_workspace.py,storage.py,transformations.py}`, `dataatlas/static/{index.html,styles.css,app.js}`, and tests including `test_auth_api.py`, `test_database.py`, `test_jobs.py`, `test_quality.py`, and `test_quality_api.py`.
 
 ## Commands and verification
 
-- `python -B -m unittest discover -s tests -v` — 29 tests passed.
+- `python -B -m unittest discover -s tests -q` — 36 tests passed.
 - Python AST parsing, `node --check dataatlas/static/app.js`, and `git diff --check` — passed.
 - Ran `python -m dataatlas.server` and `python -m dataatlas.seed`; health endpoint reported `ok`, sample dataset held 5 rows/5 columns, profile and lineage endpoints returned computed/stored data.
 - Restarted server against same `DATAATLAS_HOME`; sample dataset still present with 5 rows.
@@ -88,3 +93,4 @@ Checkpoint 10 complete: searchable catalog, profiling, schema evolution, bounded
 ## Known blockers
 
 Docker is unavailable, so Compose/PostgreSQL deployment remains unverified. The Next.js/FastAPI/PostgreSQL/Parquet/DuckDB target stack is not yet implemented; the current dependency-free local application remains usable. Ingestion is synchronous and orphan-file reconciliation after abrupt process exit remains unfinished. An ignored `var/lake` folder contains raw CSV fixtures from an earlier smoke-test attempt; automatic review rejected deleting the parent runtime folder because it could contain persistent catalog or lake data, so it was preserved.
+- Assistant tests verified provider fallback, local grounding, explicit SQL intent, authenticated workspace access, candidate validation, and that a suggestion creates no query history before a user runs it.\n

@@ -9,7 +9,13 @@ if (qualityNavItem) {
 }
 const notificationButton = document.querySelector(".icon-button[aria-label='Notifications']");
 if (notificationButton) notificationButton.id = "alerts-button";
-const state = { datasets: [], jobs: [], search: "", view: "datasets", user: null, workspace: null, workspaces: [], authMode: "login", sqlTables: [], queries: [], transformations: [], transformRuns: [], lineageDatasets: [], qualityRules: [], qualityRuns: [], alerts: [], qualityDataset: "" };
+const assistantNavItem = document.createElement("a");
+assistantNavItem.className = "nav-item";
+assistantNavItem.id = "assistant-nav";
+assistantNavItem.href = "#assistant";
+assistantNavItem.innerHTML = "<span>✦</span> AI discovery";
+document.querySelector(".sidebar nav").append(assistantNavItem);
+const state = { datasets: [], jobs: [], search: "", view: "datasets", user: null, workspace: null, workspaces: [], authMode: "login", sqlTables: [], queries: [], transformations: [], transformRuns: [], lineageDatasets: [], qualityRules: [], qualityRuns: [], alerts: [], qualityDataset: "", assistantSql: null };
 const fmt = (value) => Number(value).toLocaleString();
 
 async function api(path, options = {}) {
@@ -91,6 +97,7 @@ async function refresh() {
     if (state.view === "transformations") await refreshTransformations();
     if (state.view === "lineage") await refreshLineage();
     if (state.view === "quality") await refreshQuality();
+    if (state.view === "assistant") await refreshAssistant();
   } catch (error) {
     if (!$("#auth-screen").hidden) return;
     toast(error.message);
@@ -104,19 +111,22 @@ function render() {
   const transformView = state.view === "transformations";
   const lineageView = state.view === "lineage";
   const qualityView = state.view === "quality";
-  $("#catalog").hidden = sqlView || transformView || lineageView || qualityView;
+  const assistantView = state.view === "assistant";
+  $("#catalog").hidden = sqlView || transformView || lineageView || qualityView || assistantView;
   $("#sql-workspace").hidden = !sqlView;
   $("#transformations-view").hidden = !transformView;
   $("#lineage-view").hidden = !lineageView;
   $("#quality-view").hidden = !qualityView;
+  $("#assistant-view").hidden = !assistantView;
   document.querySelector('.nav-item[href="#catalog"]').classList.toggle("active", !sqlView && !transformView && !lineageView && !qualityView && !jobsView);
   $("#ingestion-nav").classList.toggle("active", jobsView);
   $("#sql-nav").classList.toggle("active", sqlView);
   $("#transform-nav").classList.toggle("active", transformView);
   $("#lineage-nav").classList.toggle("active", lineageView);
   $("#quality-nav").classList.toggle("active", qualityView);
-  $(".crumb b").textContent = sqlView ? "SQL workspace" : transformView ? "Transformations" : lineageView ? "Lineage" : qualityView ? "Data quality" : jobsView ? "Ingestion" : "Catalog";
-  if (sqlView || transformView || lineageView || qualityView) return;
+  $("#assistant-nav").classList.toggle("active", assistantView);
+  $(".crumb b").textContent = sqlView ? "SQL workspace" : transformView ? "Transformations" : lineageView ? "Lineage" : qualityView ? "Data quality" : assistantView ? "AI discovery" : jobsView ? "Ingestion" : "Catalog";
+  if (sqlView || transformView || lineageView || qualityView || assistantView) return;
   const list = state.datasets.filter((dataset) => !layer || dataset.layer === layer);
   $("#stat-datasets").textContent = fmt(state.datasets.length);
   $("#stat-rows").textContent = fmt(state.datasets.reduce((sum, dataset) => sum + dataset.row_count, 0));
@@ -460,6 +470,72 @@ async function acknowledgeQualityAlert(id) {
   catch (error) { toast(error.message); }
 }
 
+async function refreshAssistant() {
+  try {
+    const status = await api("/api/assistant/status");
+    $("#assistant-provider-status").textContent = status.configured
+      ? "Provider: " + status.provider + " · " + status.model : "Local mode · no API key configured";
+    $("#assistant-provider-status").title = status.message;
+  } catch (error) { $("#assistant-provider-status").textContent = error.message; }
+}
+
+async function askAssistant() {
+  const question = $("#assistant-question").value.trim();
+  if (!question) { $("#assistant-message").textContent = "Enter a question about this workspace."; return; }
+  const button = $("#assistant-ask"); button.disabled = true; button.textContent = "Searching metadata…";
+  $("#assistant-message").textContent = "Retrieving authorized workspace metadata.";
+  try {
+    const result = await api("/api/assistant/ask", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
+    $("#assistant-answer").textContent = result.answer;
+    $("#assistant-message").textContent = result.warning || ("Answered with " + result.provider + " context.");
+    $("#assistant-sources").innerHTML = result.sources.length ? "<b>Sources</b>" + result.sources.map((source) =>
+      '<button type="button" class="assistant-source" data-id="' + esc(source.id) + '">' + esc(source.name) + "</button>").join("") : "";
+    $("#assistant-sources").querySelectorAll(".assistant-source").forEach((source) =>
+      source.onclick = () => openDetail(source.dataset.id));
+  } catch (error) {
+    $("#assistant-answer").textContent = error.payload?.error || error.message;
+    $("#assistant-message").textContent = "The question could not be answered.";
+    $("#assistant-sources").innerHTML = "";
+  } finally { button.disabled = false; button.innerHTML = 'Ask <span>→</span>'; }
+}
+
+async function suggestAssistantSql() {
+  const question = $("#assistant-question").value.trim();
+  if (!question) { $("#assistant-sql-status").textContent = "Enter a request first."; return; }
+  const button = $("#assistant-suggest-sql"); button.disabled = true; button.textContent = "Generating and validating…";
+  $("#assistant-review-sql").disabled = true;
+  state.assistantSql = null;
+  try {
+    const result = await api("/api/assistant/sql-suggest", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
+    state.assistantSql = result;
+    $("#assistant-sql-code").hidden = !result.sql;
+    $("#assistant-sql-code").textContent = result.sql || "";
+    $("#assistant-sql-explanation").textContent = [
+      result.explanation || "", ...(result.assumptions || []).map((item) => "Assumption: " + item)
+    ].filter(Boolean).join("\n");
+    $("#assistant-sql-status").textContent = result.valid
+      ? ("Validated read-only candidate · " + result.provider + (result.warning ? " · " + result.warning : ""))
+      : result.validation_error || result.error || "No valid candidate was produced.";
+    $("#assistant-review-sql").disabled = !result.valid;
+  } catch (error) {
+    $("#assistant-sql-status").textContent = error.payload?.error || error.message;
+    $("#assistant-sql-code").hidden = true;
+    $("#assistant-sql-explanation").textContent = "";
+  } finally { button.disabled = false; button.textContent = "Generate a SQL suggestion"; }
+}
+
+async function reviewAssistantSql() {
+  const candidate = state.assistantSql;
+  if (!candidate?.valid || !candidate.sql) return;
+  state.view = "sql";
+  render();
+  await refreshSql();
+  $("#sql-editor").value = candidate.sql;
+  $("#sql-message").textContent = "Candidate passed static read-only checks. Inspect or edit it, then choose Run query to execute.";
+}
+
 function loadTransformation(id) {
   const item = state.transformations.find((entry) => entry.id === id);
   if (!item) return;
@@ -638,6 +714,10 @@ $("#run-quality").onclick = runQualityChecks;
 $("#new-quality-rule").onclick = resetQualityForm;
 $("#cancel-quality-edit").onclick = resetQualityForm;
 $("#refresh-alerts").onclick = refreshQuality;
+$("#assistant-nav").onclick = async (event) => { event.preventDefault(); state.view = "assistant"; render(); await refreshAssistant(); };
+$("#assistant-ask").onclick = askAssistant;
+$("#assistant-suggest-sql").onclick = suggestAssistantSql;
+$("#assistant-review-sql").onclick = reviewAssistantSql;
 $("#new-transformation").onclick = resetTransformationForm;
 $("#transform-form").onsubmit = async (event) => {
   event.preventDefault();

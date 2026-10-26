@@ -120,3 +120,15 @@ Each phase should be split at a coherent checkpoint; update `PROGRESS.md` and `K
 - [x] Add rule management, run detail, violation samples, recent alerts, and notification navigation to the UI.
 - [x] Verify rule calculations, API persistence and versions, automatic checks after replacement, alert lifecycle, and schema migrations.
 - [ ] Add custom SQL predicate rules under a dedicated validated expression grammar, staleness detection, email delivery, and downstream schema-impact analysis later.
+
+
+## Checkpoint 11 — Metadata assistant and reviewed SQL suggestions (complete for bounded local mode)
+
+- [x] Add a local metadata assistant for profile, quality, processing, lineage, schema, and catalog questions.
+- [x] Add an optional stateless OpenAI Responses provider using environment-held credentials and model configuration.
+- [x] Send bounded workspace-authorized metadata only; do not send records, raw files, or query results.
+- [x] Suggest SQL from schemas, then validate it with SQLite EXPLAIN against empty schema-only tables.
+- [x] Require the user to review and explicitly run a suggestion in the SQL workspace; suggestions never execute automatically.
+- [x] Restrict local SQL generation to explicit row previews and counts and report unsupported requests clearly.
+- [x] Verify SQL form restrictions, local answer grounding, provider-offline behavior, workspace authentication, and no query-history entry before execution.
+- [ ] Add broader analytical intent handling only with explicit query review; add export and report workflows in checkpoint 12.
